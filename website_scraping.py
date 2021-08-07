@@ -3,18 +3,18 @@ import requests
 from bs4 import BeautifulSoup
 import urllib.parse
 import csv
+import os
+import shutil  
+
 
 #specify the url of the web site
 url = "http://books.toscrape.com/"
 
 #query the web site and extract html
-
 page = requests.get(url)
 
 #parse the html line
-
 soup = BeautifulSoup(page.content,'html.parser')
-
 a_tags = soup.find_all("a", href=lambda href: href and "catalogue/category/books/" in href)
 
 # extract the category  data
@@ -37,18 +37,14 @@ for a_tag in a_tags:
     # tag does not has a href params we pass
     except:
         pass
+# getting current directory
+cwd = os.getcwd()
 
+# for loop that iterates over all the category to extract books information
+for url_category in urls:
 
-# for loop that iterates over all the category
-loop_compteur = 0
-
-for url_categroy in urls:
-
-    loop_compteur =loop_compteur + 1
-    print(loop_compteur)
-    print(url_categroy)
     #specify the catalogue web page url
-    url_catalogue_page = url_categroy
+    url_catalogue_page = url_category
 
     #query the web site to get the html
     try:
@@ -60,7 +56,6 @@ for url_categroy in urls:
     soup = BeautifulSoup(page.content, 'html.parser')
 
     #extract Books section
-
     list = soup.find_all("li", class_="col-xs-6 col-sm-4 col-md-3 col-lg-3")
 
     #extract links
@@ -75,6 +70,17 @@ for url_categroy in urls:
     csv_row_list = [["product_page_url","Universal product code (upc)", "Title", "Price including tax", "Price excluding_tax",
                     "Number available", "Product description", "Category", "Review rating", "Image url"]]
 
+    #creating a specific folder to save pictures of all the category books
+    path = "Downloads_pictures/"
+    dir_path = os.path.join(cwd, path)
+    
+    # Create folders if not exist
+    try:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+    except OSError:
+        print("Error")
+
     #for loop that iterates over all the books of the specific category
     for booklink in books_href_links:
 
@@ -82,7 +88,6 @@ for url_categroy in urls:
         url_book_page =booklink
 
         # query the website and return the html to the variable web page
-
         try:
             page = requests.get(url_book_page)
         except:
@@ -94,7 +99,7 @@ for url_categroy in urls:
         #find the book title and product description
         title = soup.find("div", class_="col-sm-6 product_main").find("h1").text
 
-        # rating (try to find another way to reduce the code line / the select should be tested)
+        # rating 
         section = soup.find("div", class_="col-sm-6 product_main")
         rating_1 = section.find("p", class_="star-rating One")
         rating_2 = section.find("p", class_="star-rating Two")
@@ -112,8 +117,6 @@ for url_categroy in urls:
             review_rating = 4
         elif rating_5 !=None:
             review_rating = 5
-
-
 
         #find results within the table
         table = soup.find("table", class_="table table-striped")
@@ -136,6 +139,26 @@ for url_categroy in urls:
         # use the .attrs method to pull out the URL found in src=
         image_url_ext = image.attrs['src']
         image_url = urllib.parse.urljoin(url_book_page, image_url_ext)
+        
+        #save image in download picture folder
+        os.chdir(dir_path)
+        filename = image_url.split("/")[-1]
+
+        # Open the url image, set stream to True, this will return the stream content.
+        r = requests.get(image_url, stream=True)
+
+        # Check if the image was retrieved successfully
+        if r.status_code == 200:
+            # Set decode_content value to True, otherwise the downloaded image file's size will be zero.
+            r.raw.decode_content = True
+
+            # Open a local file with wb ( write binary ) permission.
+            with open(filename, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+
+            print('Image sucessfully Downloaded: ', filename)
+        else:
+            print('Image Couldn\'t be retreived')
 
         # find the production description
         article = soup.find("article", class_="product_page")
@@ -143,6 +166,7 @@ for url_categroy in urls:
         try:
             product_description = paragraphes[0].text
         except:
+            production_description = "not possible to get description"
             pass
         #find the book category
         list_ul = soup.find("ul", class_="breadcrumb")
@@ -161,26 +185,18 @@ for url_categroy in urls:
     # added book information to the csv data list
         csv_row_list.append([url_book_page, universal_product_code, title, price_including_tax, price_excluding_tax,
                     number_available, product_description, category, review_rating, image_url])
-        #test
-        #print("url of the book page: ",url_book_page)
-        #print("Book title: ", title)
-        #print("Universal product code: ", universal_product_code)
-        #print("Review rating: ", review_rating)
-        #print("Price excluding tax:", price_excluding_tax)
-        #print("Price including tax: ", price_including_tax)
-        #print("Number available: ", number_available)
-        #print("Number of reviews: ", number_of_reviews)
-        #print("The url of the image: ", image_url)
-        #print(paragraphes[0].text)
 
-
-
+    
+    os.chdir('../')
     # create a csv file and write rows to output file
-
     with open("%s_data_book.csv" % category, 'w+', newline='', encoding="utf-8") as csv_file:
         datawiter = csv.writer(csv_file,)
         datawiter.writerows(csv_row_list)
     print("%s_data_book.txt has been crated" % category)
+
+
+
+
 
 
 
